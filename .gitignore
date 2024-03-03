@@ -1,0 +1,5 @@
+venv*
+*.xml
+*.csv
+*.log
+sumo_files/
