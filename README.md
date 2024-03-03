@@ -50,3 +50,7 @@ To run the simulation, use the following command:
 ```bash
 python main.py
 ```
+
+## Analysis
+
+You can open the `performance_analysis.ipynb` file to see the results of the simulation. You can alson run the file using Jupyter Notebook.
