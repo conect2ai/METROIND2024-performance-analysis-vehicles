@@ -1,44 +1,67 @@
 """
-The main file that runs the simulation and sends to the database the data collected.
+Through Traffic Factor: 1000
+Count: 1000
+Duration: 25
 """
 
 import os
 import sys
+import psutil
 import logging
-import requests
 import traci
+import requests
 
 from datetime import datetime
+from dotenv import dotenv_values
 
+
+sys.dont_write_bytecode = True
+
+if "--instance" in sys.argv:
+    instance = sys.argv[sys.argv.index("--instance") + 1]
+else:
+    print("Please, provide the instance number using --instance flag")
+    sys.exit(1)
+
+if "--steps" in sys.argv:
+    steps = int(sys.argv[sys.argv.index("--steps") + 1])
+else:
+    steps = 30
 
 logging.basicConfig(
-    filename="main.log",
+    filename=f"{sys.argv[0].split('.')[0]}_{instance}.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-sys.dont_write_bytecode = True
+pid = os.getpid()
+process = psutil.Process(pid)
 
-ARCHITECTURE_URL = YOUR_ARCHITECTURE_URL
+env_vars = dotenv_values(".env")
+ARCHITECTURE_URL = env_vars.get("ARCHITECTURE_URL")
 
 logging.info(f"Starting SUMO simulation at [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
 
 traci.start([
     "sumo", "-c", "./sumo_files/osm.sumocfg",
     "--emission-output", "emission.xml",
-])
+], label=f"sumo_{instance}")
 
 while traci.simulation.getMinExpectedNumber() > 0:
     traci.simulationStep()
-    logging.info(f"Simulation time: [{traci.simulation.getTime()}] - Number of vehicles: [{len(traci.vehicle.getIDList())}]")
+    
+    sim_time = traci.simulation.getTime()
+
+    if sim_time > steps:
+        break
 
     for veh in traci.vehicle.getIDList():
         x, y = traci.vehicle.getPosition(veh)
         lon, lat = traci.simulation.convertGeo(x, y)
 
         data = {
-            "vehid": veh,
-            "timestamp_sumo": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "vehid": f"{veh}_{instance}",
+            "timestamp_sumo": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
             "acceleration": round(traci.vehicle.getAcceleration(veh), 2),
             "co2_emission": round(traci.vehicle.getCO2Emission(veh), 2),
             "distance_odometer": round(traci.vehicle.getDistance(veh), 2),
@@ -55,6 +78,8 @@ while traci.simulation.getMinExpectedNumber() > 0:
             url = ARCHITECTURE_URL,
             data = data
         )
+    
+    logging.info(f"STEP: [{traci.simulation.getTime()}] - MEM: [{process.memory_percent():.4f}%] - CPU: [{process.cpu_percent():.4f}%] - VEH: [{len(traci.vehicle.getIDList())}]")
 
 traci.close()
 
